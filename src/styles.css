@@ -380,7 +380,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   min-height: 42px;
   width: 100%;
   border-radius: 8px;
@@ -389,6 +390,14 @@ select {
   color: var(--text);
   padding: 9px 10px;
   font-weight: 600;
+}
+
+textarea {
+  min-height: 260px;
+  resize: vertical;
+  line-height: 1.45;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
 }
 
 .matter-list {
@@ -698,6 +707,140 @@ th {
   align-items: center;
 }
 
+.documents-workspace {
+  display: grid;
+  gap: 16px;
+}
+
+.documents-grid,
+.template-library {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  gap: 16px;
+}
+
+.template-summary {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.template-summary p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.document-textarea {
+  min-height: 360px;
+}
+
+.generated-document-row {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 13px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.65fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.generated-document-row p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.generated-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.template-list,
+.merge-field-groups,
+.data-quality-list {
+  display: grid;
+  gap: 10px;
+}
+
+.template-list-item {
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.template-list-item.active {
+  border-color: var(--blue);
+  box-shadow: inset 4px 0 0 var(--blue);
+}
+
+.template-editor {
+  display: grid;
+  gap: 14px;
+}
+
+.merge-chip-list,
+.merge-field-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.merge-chip-list span,
+.merge-field-card code {
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: #1d4ed8;
+  padding: 6px 9px;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.document-preview {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  padding: 14px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.document-preview pre {
+  white-space: pre-wrap;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.merge-field-group {
+  display: grid;
+  gap: 10px;
+}
+
+.merge-field-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.merge-field-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 13px;
+  display: grid;
+  gap: 8px;
+}
+
+.merge-field-card p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
 .document-row p {
   margin: 8px 0 0;
   color: var(--muted);
@@ -794,7 +937,11 @@ footer {
   .page-header,
   .detail-header,
   .task-card,
-  .document-row {
+  .document-row,
+  .generated-document-row,
+  .documents-grid,
+  .template-library,
+  .merge-field-list {
     display: grid;
     grid-template-columns: 1fr;
   }

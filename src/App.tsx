@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { assetOwnershipTypes, assetTypes, documentationStatuses, estateTypes, matterStages, matterStatuses, paralegals, personRoles, probateCourts, taskCategories, taskPriorities, taskStatuses } from "./data/constants";
+import { getMergeFieldValue, mergeTemplate, getMatterDocumentDataIssues, getMissingMergeFields, listAvailableMergeFields, validateTemplateFields } from "./services/documentMergeService";
 import { matterStorage } from "./services/matterStorage";
-import type { Asset, DocumentChecklistItem, Matter, Note, Person, Task } from "./types";
+import { templateStorage } from "./services/templateStorage";
+import type { Asset, DocumentChecklistItem, DocumentTemplate, GeneratedDocument, Matter, Note, Person, Task } from "./types";
 import { currency, formatDate, isDueWithin, isOverdue, makeId, nowIso } from "./utils/date";
 import { generateEstateDeadlines } from "./utils/deadlineEngine";
 import { generateDocumentChecklist } from "./utils/documentChecklist";
@@ -11,10 +13,12 @@ type Route =
   | { page: "dashboard" }
   | { page: "matters" }
   | { page: "new" }
+  | { page: "templates" }
+  | { page: "merge-fields" }
   | { page: "settings" }
   | { page: "matter"; id: string };
 
-type IntakeMatter = Omit<Matter, "id" | "createdAt" | "updatedAt" | "tasks" | "documents" | "notes" | "riskFlags"> & { notes: Note[] };
+type IntakeMatter = Omit<Matter, "id" | "createdAt" | "updatedAt" | "tasks" | "documents" | "generatedDocuments" | "notes" | "riskFlags"> & { notes: Note[] };
 
 const emptyPerson = (): Person => ({
   id: makeId("person"),
@@ -106,6 +110,8 @@ function parseHash(): Route {
   if (!hash) return { page: "dashboard" };
   if (hash === "matters") return { page: "matters" };
   if (hash === "new") return { page: "new" };
+  if (hash === "templates") return { page: "templates" };
+  if (hash === "merge-fields") return { page: "merge-fields" };
   if (hash === "settings") return { page: "settings" };
   if (hash.startsWith("matter/")) return { page: "matter", id: hash.split("/")[1] };
   return { page: "dashboard" };
@@ -120,10 +126,12 @@ function routeToHash(route: Route) {
 function App() {
   const [route, setRoute] = useState<Route>(parseHash);
   const [matters, setMatters] = useState<Matter[]>([]);
+  const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
 
   useEffect(() => {
     matterStorage.seedMattersIfEmpty();
     setMatters(matterStorage.getMatters());
+    setTemplates(templateStorage.getTemplates());
     const onHashChange = () => setRoute(parseHash());
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -135,6 +143,7 @@ function App() {
   };
 
   const refresh = () => setMatters(matterStorage.getMatters());
+  const refreshTemplates = () => setTemplates(templateStorage.getTemplates());
 
   const updateMatter = (id: string, updates: Partial<Matter>) => {
     const updated = matterStorage.updateMatter(id, updates);
@@ -158,6 +167,8 @@ function App() {
           <NavButton active={route.page === "dashboard"} label="Dashboard" icon="grid" onClick={() => navigate({ page: "dashboard" })} />
           <NavButton active={route.page === "matters" || route.page === "matter"} label="Matters" icon="folder" onClick={() => navigate({ page: "matters" })} />
           <NavButton active={route.page === "new"} label="New Matter" icon="plus" onClick={() => navigate({ page: "new" })} />
+          <NavButton active={route.page === "templates"} label="Templates" icon="doc" onClick={() => navigate({ page: "templates" })} />
+          <NavButton active={route.page === "merge-fields"} label="Merge Fields" icon="code" onClick={() => navigate({ page: "merge-fields" })} />
           <NavButton active={route.page === "settings"} label="Settings/About" icon="info" onClick={() => navigate({ page: "settings" })} />
         </nav>
         <div className="sidebar-note">Internal workflow tool only. Deadlines and filings require attorney/paralegal review.</div>
@@ -167,15 +178,17 @@ function App() {
         {route.page === "dashboard" && <Dashboard matters={matters} navigate={navigate} />}
         {route.page === "matters" && <MatterList matters={matters} navigate={navigate} />}
         {route.page === "new" && <IntakeWizard onCreate={(matter) => { matterStorage.createMatter(matter); refresh(); navigate({ page: "matter", id: matter.id }); }} />}
+        {route.page === "templates" && <TemplatesPage templates={templates} matters={matters} onRefresh={refreshTemplates} />}
+        {route.page === "merge-fields" && <MergeFieldsPage matters={matters} />}
         {route.page === "settings" && <SettingsAbout />}
-        {route.page === "matter" && selectedMatter && <MatterDetail matter={selectedMatter} updateMatter={updateMatter} navigate={navigate} />}
+        {route.page === "matter" && selectedMatter && <MatterDetail matter={selectedMatter} templates={templates} updateMatter={updateMatter} navigate={navigate} />}
         {route.page === "matter" && !selectedMatter && <EmptyState title="Matter not found" message="The selected matter may have been deleted or the local prototype data was reset." actionLabel="Back to matters" onAction={() => navigate({ page: "matters" })} />}
       </main>
     </div>
   );
 }
 
-function NavButton({ active, label, icon, onClick }: { active: boolean; label: string; icon: "grid" | "folder" | "plus" | "info"; onClick: () => void }) {
+function NavButton({ active, label, icon, onClick }: { active: boolean; label: string; icon: "grid" | "folder" | "plus" | "info" | "doc" | "code"; onClick: () => void }) {
   return (
     <button className={`nav-button ${active ? "active" : ""}`} onClick={onClick}>
       <Icon name={icon} />
@@ -184,7 +197,7 @@ function NavButton({ active, label, icon, onClick }: { active: boolean; label: s
   );
 }
 
-function Icon({ name }: { name: "grid" | "folder" | "plus" | "info" | "arrow" | "check" }) {
+function Icon({ name }: { name: "grid" | "folder" | "plus" | "info" | "arrow" | "check" | "doc" | "code" }) {
   const paths = {
     grid: <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />,
     folder: <path d="M3 6h7l2 2h9v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
@@ -192,6 +205,8 @@ function Icon({ name }: { name: "grid" | "folder" | "plus" | "info" | "arrow" | 
     info: <path d="M12 17v-6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />,
     arrow: <path d="M5 12h14M13 5l7 7-7 7" />,
     check: <path d="M20 6 9 17l-5-5" />,
+    doc: <path d="M6 3h8l4 4v14H6zM14 3v5h5M9 13h6M9 17h6" />,
+    code: <path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14" />,
   };
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -355,6 +370,7 @@ function IntakeWizard({ onCreate }: { onCreate: (matter: Matter) => void }) {
       ...draft,
       tasks: [],
       documents: [],
+      generatedDocuments: [],
       riskFlags: [],
     };
     matter.tasks = generateEstateDeadlines(matter);
@@ -423,7 +439,7 @@ function IntakeWizard({ onCreate }: { onCreate: (matter: Matter) => void }) {
   );
 }
 
-function MatterDetail({ matter, updateMatter, navigate }: { matter: Matter; updateMatter: (id: string, updates: Partial<Matter>) => Matter | undefined; navigate: (route: Route) => void }) {
+function MatterDetail({ matter, templates, updateMatter, navigate }: { matter: Matter; templates: DocumentTemplate[]; updateMatter: (id: string, updates: Partial<Matter>) => Matter | undefined; navigate: (route: Route) => void }) {
   const [tab, setTab] = useState("overview");
   const save = (updates: Partial<Matter>) => updateMatter(matter.id, updates);
 
@@ -446,7 +462,7 @@ function MatterDetail({ matter, updateMatter, navigate }: { matter: Matter; upda
       {tab === "people" && <PeopleEditor people={matter.people} onChange={(people) => save({ people })} />}
       {tab === "assets" && <AssetsEditor assets={matter.assets} onChange={(assets) => save({ assets })} />}
       {tab === "deadlines & tasks" && <TasksEditor matter={matter} onChange={(tasks) => save({ tasks })} />}
-      {tab === "documents" && <DocumentsEditor documents={matter.documents} onChange={(documents) => save({ documents })} />}
+      {tab === "documents" && <DocumentsEditor matter={matter} templates={templates} onChange={save} />}
       {tab === "notes" && <NotesEditor notes={matter.notes} onChange={(notes) => save({ notes })} />}
     </Page>
   );
@@ -495,6 +511,7 @@ function Overview({ matter }: { matter: Matter }) {
         <Readout label="Claim period start" value={formatDate(matter.claimPeriodStartDate)} />
         <Readout label="Last updated" value={formatDate(matter.updatedAt.slice(0, 10))} />
       </section>
+      <DocumentDataQualityPanel matter={matter} />
       <section className="panel span-2">
         <div className="panel-heading"><h2>Internal Notes Summary</h2><span>Most recent entries</span></div>
         {matter.notes.slice(0, 3).map((note) => <p key={note.id} className="note-preview">{note.text}<small>{note.author} · {formatDate(note.dateTime.slice(0, 10))}</small></p>)}
@@ -642,18 +659,155 @@ function TasksEditor({ matter, onChange }: { matter: Matter; onChange: (tasks: T
   );
 }
 
-function DocumentsEditor({ documents, onChange }: { documents: DocumentChecklistItem[]; onChange: (documents: DocumentChecklistItem[]) => void }) {
+function DocumentsEditor({ matter, templates, onChange }: { matter: Matter; templates: DocumentTemplate[]; onChange: (updates: Partial<Matter>) => void }) {
+  const [selectedTemplateId, setSelectedTemplateId] = useState(templates[0]?.id || "");
+  const [selectedChecklistId, setSelectedChecklistId] = useState("");
+  const [updateChecklist, setUpdateChecklist] = useState(true);
+  const [generatedBy, setGeneratedBy] = useState(matter.assignedParalegal || "Unassigned");
+  const [draftBody, setDraftBody] = useState("");
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftNotes, setDraftNotes] = useState("");
+  const [activeDocumentId, setActiveDocumentId] = useState("");
+  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) || templates[0];
+  const missingFields = selectedTemplate ? getMissingMergeFields(selectedTemplate.body, matter) : [];
+  const generatedDocuments = matter.generatedDocuments || [];
+
+  const generatePreview = () => {
+    if (!selectedTemplate) return;
+    setDraftTitle(selectedTemplate.name);
+    setDraftBody(mergeTemplate(selectedTemplate.body, matter));
+    setDraftNotes(selectedTemplate.requiresAttorneyReview ? "Draft generated for attorney/paralegal review." : "");
+    setActiveDocumentId("");
+  };
+
+  const saveDraft = () => {
+    if (!selectedTemplate || !draftBody.trim()) return;
+    const stamp = nowIso();
+    const saved: GeneratedDocument = {
+      id: activeDocumentId || makeId("generated-doc"),
+      matterId: matter.id,
+      templateId: selectedTemplate.id,
+      title: draftTitle || selectedTemplate.name,
+      category: selectedTemplate.category,
+      generatedBody: draftBody,
+      status: selectedTemplate.requiresAttorneyReview ? "attorney review" : selectedTemplate.defaultStatus,
+      generatedAt: activeDocumentId ? generatedDocuments.find((doc) => doc.id === activeDocumentId)?.generatedAt || stamp : stamp,
+      updatedAt: stamp,
+      generatedBy,
+      notes: draftNotes,
+      relatedDocumentChecklistItemId: selectedChecklistId || undefined,
+    };
+    const nextGeneratedDocuments = activeDocumentId
+      ? generatedDocuments.map((doc) => doc.id === activeDocumentId ? saved : doc)
+      : [saved, ...generatedDocuments];
+    const nextDocuments = updateChecklist && selectedChecklistId
+      ? matter.documents.map((doc) => doc.id === selectedChecklistId ? { ...doc, status: selectedTemplate.requiresAttorneyReview ? "attorney review" : "drafted" as DocumentChecklistItem["status"] } : doc)
+      : matter.documents;
+    onChange({ generatedDocuments: nextGeneratedDocuments, documents: nextDocuments });
+    setActiveDocumentId(saved.id);
+  };
+
+  const loadGenerated = (doc: GeneratedDocument) => {
+    setActiveDocumentId(doc.id);
+    setSelectedTemplateId(doc.templateId);
+    setSelectedChecklistId(doc.relatedDocumentChecklistItemId || "");
+    setDraftTitle(doc.title);
+    setDraftBody(doc.generatedBody);
+    setDraftNotes(doc.notes);
+    setGeneratedBy(doc.generatedBy);
+  };
+
+  const updateGeneratedDocument = (id: string, updates: Partial<GeneratedDocument>) => {
+    onChange({ generatedDocuments: generatedDocuments.map((doc) => doc.id === id ? { ...doc, ...updates, updatedAt: nowIso() } : doc) });
+  };
+
   return (
-    <section className="panel editor-panel">
-      <div className="panel-heading"><h2>Document Checklist</h2><span>Checklist only; no document generation in Phase 1</span></div>
-      <div className="document-list">
-        {documents.map((doc) => (
-          <article key={doc.id} className="document-row">
-            <div><strong>{doc.name}</strong><small>{doc.category}{doc.relatedDueDate ? ` · related date ${formatDate(doc.relatedDueDate)}` : ""}</small><p>{doc.notes}</p></div>
-            <Select label="Status" value={doc.status} onChange={(value) => onChange(documents.map((item) => item.id === doc.id ? { ...item, status: value as DocumentChecklistItem["status"] } : item))} options={["not started", "draft needed", "drafted", "attorney review", "ready to send/file", "filed/sent"]} />
-          </article>
-        ))}
+    <section className="documents-workspace">
+      <div className="panel editor-panel">
+        <div className="panel-heading"><h2>Document Checklist</h2><span>Checklist plus generated draft integration</span></div>
+        <div className="document-list">
+          {matter.documents.map((doc) => (
+            <article key={doc.id} className="document-row">
+              <div><strong>{doc.name}</strong><small>{doc.category}{doc.relatedDueDate ? ` · related date ${formatDate(doc.relatedDueDate)}` : ""}</small><p>{doc.notes}</p></div>
+              <Select label="Status" value={doc.status} onChange={(value) => onChange({ documents: matter.documents.map((item) => item.id === doc.id ? { ...item, status: value as DocumentChecklistItem["status"] } : item) })} options={["not started", "draft needed", "drafted", "attorney review", "ready to send/file", "filed/sent"]} />
+            </article>
+          ))}
+        </div>
       </div>
+
+      <div className="documents-grid">
+        <section className="panel editor-panel">
+          <div className="panel-heading"><h2>Generate Draft</h2><span>Draft only; review required</span></div>
+          <FormGrid>
+            <Select label="Template" value={selectedTemplate?.id || ""} onChange={setSelectedTemplateId} options={templates.map((template) => template.id)} />
+            <Select label="Link checklist item" value={selectedChecklistId} onChange={setSelectedChecklistId} options={["", ...matter.documents.map((doc) => doc.id)]} />
+            <Input label="Generated by" value={generatedBy} onChange={setGeneratedBy} />
+            <label className="check-row"><input type="checkbox" checked={updateChecklist} onChange={(event) => setUpdateChecklist(event.target.checked)} /> Update checklist status on save</label>
+          </FormGrid>
+          {selectedTemplate && (
+            <div className="template-summary">
+              <strong>{selectedTemplate.name}</strong>
+              <p>{selectedTemplate.description}</p>
+              {selectedTemplate.requiresAttorneyReview && <Badge tone="red">Review required</Badge>}
+            </div>
+          )}
+          {missingFields.length > 0 && (
+            <div className="warning-box">
+              <strong>Missing merge field data</strong>
+              <p>{missingFields.map((field) => field.label).join(", ")}</p>
+            </div>
+          )}
+          <button className="primary-button" onClick={generatePreview}>Generate Draft</button>
+        </section>
+
+        <section className="panel editor-panel">
+          <div className="panel-heading"><h2>Draft Preview</h2><span>Edit before saving</span></div>
+          <Input label="Draft title" value={draftTitle} onChange={setDraftTitle} />
+          <label>
+            <span>Generated body</span>
+            <textarea className="document-textarea" value={draftBody} onChange={(event) => setDraftBody(event.target.value)} placeholder="Generate a draft from a template to preview it here." />
+          </label>
+          <Input label="Notes" value={draftNotes} onChange={setDraftNotes} />
+          <div className="row-actions">
+            <button className="primary-small" onClick={saveDraft}>Save draft</button>
+            <button onClick={() => copyText(draftBody)}>Copy text</button>
+            <button onClick={() => printTextDocument(draftTitle || "EstateHornet Draft", draftBody)}>Print</button>
+            <button onClick={() => downloadText(`${draftTitle || "estatehornet-draft"}.txt`, draftBody)}>Download .txt</button>
+            <button onClick={() => downloadText(`${draftTitle || "estatehornet-draft"}.html`, `<pre>${escapeHtml(draftBody)}</pre>`)}>Download .html</button>
+          </div>
+        </section>
+      </div>
+
+      <section className="panel editor-panel">
+        <div className="panel-heading"><h2>Generated Documents</h2><span>{generatedDocuments.length} saved drafts</span></div>
+        <div className="document-list">
+          {generatedDocuments.map((doc) => {
+            const template = templates.find((item) => item.id === doc.templateId);
+            return (
+              <article key={doc.id} className="generated-document-row">
+                <div>
+                  <strong>{doc.title}</strong>
+                  <small>{template?.name || "Unknown template"} · {doc.category} · generated {formatDate(doc.generatedAt.slice(0, 10))} · updated {formatDate(doc.updatedAt.slice(0, 10))}</small>
+                  {template?.requiresAttorneyReview && <Badge tone="red">Review required</Badge>}
+                  <p>{doc.notes || "No notes."}</p>
+                </div>
+                <div className="generated-actions">
+                  <Select label="Status" value={doc.status} onChange={(value) => updateGeneratedDocument(doc.id, { status: value as GeneratedDocument["status"] })} options={["draft", "attorney review", "approved", "sent", "filed", "archived"]} />
+                  <Input label="Notes" value={doc.notes} onChange={(value) => updateGeneratedDocument(doc.id, { notes: value })} />
+                  <div className="row-actions">
+                    <button onClick={() => loadGenerated(doc)}>Preview/Edit</button>
+                    <button onClick={() => copyText(doc.generatedBody)}>Copy</button>
+                    <button onClick={() => printTextDocument(doc.title, doc.generatedBody)}>Print</button>
+                    <button onClick={() => downloadText(`${doc.title}.txt`, doc.generatedBody)}>Download</button>
+                    <button onClick={() => onChange({ generatedDocuments: generatedDocuments.filter((item) => item.id !== doc.id) })}>Delete</button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+          {generatedDocuments.length === 0 && <p className="muted">No generated drafts saved yet.</p>}
+        </div>
+      </section>
     </section>
   );
 }
@@ -706,7 +860,7 @@ function NotesEditor({ notes, onChange }: { notes: Note[]; onChange: (notes: Not
 }
 
 function ReviewIntake({ draft }: { draft: IntakeMatter }) {
-  const previewMatter: Matter = { id: "preview", createdAt: nowIso(), updatedAt: nowIso(), ...draft, tasks: [], documents: [], riskFlags: [] };
+  const previewMatter: Matter = { id: "preview", createdAt: nowIso(), updatedAt: nowIso(), ...draft, tasks: [], documents: [], generatedDocuments: [], riskFlags: [] };
   const tasks = generateEstateDeadlines(previewMatter);
   const documents = generateDocumentChecklist(previewMatter);
   const risks = generateRiskFlags({ ...previewMatter, tasks, documents });
@@ -726,24 +880,161 @@ function ReviewIntake({ draft }: { draft: IntakeMatter }) {
 
 function SettingsAbout() {
   return (
-    <Page title="Settings / About" kicker="Phase 1 Prototype">
+    <Page title="Settings / About" kicker="Phase 2 Prototype">
       <section className="panel about">
         <h2>EstateHornet</h2>
         <p className="lead">A Connecticut estate administration command center for deadlines, documents, clients, and matter control.</p>
         <div className="warning-box">
           <strong>Internal workflow prototype only</strong>
-          <p>EstateHornet is an internal workflow and matter management prototype. It does not provide legal advice. All deadlines, filings, tax issues, distributions, communications, and documents require attorney/paralegal review.</p>
+          <p>EstateHornet is an internal workflow and matter management prototype. It does not provide legal advice. All deadlines, filings, tax issues, distributions, communications, generated drafts, and documents require attorney/paralegal review.</p>
         </div>
         <div className="warning-box">
           <strong>Data warning</strong>
-          <p>Do not enter real client data into this prototype unless proper security, authentication, access controls, and firm approval are in place.</p>
+          <p>Do not enter real client data into this prototype unless proper security, authentication, access controls, database controls, and firm approval are in place. localStorage is not secure for confidential production data.</p>
+        </div>
+        <div className="warning-box">
+          <strong>Document generation warning</strong>
+          <p>Generated documents are drafts only. Official court forms must be reviewed against current Connecticut Probate Court requirements before filing. Court form helpers are drafting aids, not completed official forms.</p>
         </div>
         <h3>Future roadmap</h3>
         <div className="roadmap-list">
-          {["Document generation engine", "PDF form filling", "DOCX template generation", "Client portal", "Secure client document uploads", "Email automation", "Outlook/Microsoft 365 integration", "SharePoint/OneDrive integration", "Supabase/Postgres database adapter", "Secure file storage", "Audit log", "Role-based permissions", "Attorney approval workflow", "AI-assisted draft emails and summaries"].map((item) => <span key={item}>{item}</span>)}
+          {["Secure database", "Authentication", "Role-based permissions", "Audit logs", "SharePoint/OneDrive integration", "Outlook email draft integration", "Real template governance", "Official PDF form filling if approved", "Client portal", "Secure uploads", "E-signature workflow", "Attorney approval queues", "Production deployment", "AI-assisted draft emails and summaries"].map((item) => <span key={item}>{item}</span>)}
         </div>
       </section>
     </Page>
+  );
+}
+
+function TemplatesPage({ templates, matters, onRefresh }: { templates: DocumentTemplate[]; matters: Matter[]; onRefresh: () => void }) {
+  const [selectedTemplateId, setSelectedTemplateId] = useState(templates[0]?.id || "");
+  const [selectedMatterId, setSelectedMatterId] = useState(matters[0]?.id || "");
+  const [editingBody, setEditingBody] = useState("");
+  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) || templates[0];
+  const selectedMatter = matters.find((matter) => matter.id === selectedMatterId) || matters[0];
+  const validation = selectedTemplate ? validateTemplateFields(selectedTemplate.body) : { usedFields: [], unknownFields: [] };
+  const preview = selectedTemplate && selectedMatter ? mergeTemplate(selectedTemplate.body, selectedMatter) : "";
+
+  useEffect(() => {
+    if (selectedTemplate) setEditingBody(selectedTemplate.body);
+  }, [selectedTemplate?.id]);
+
+  const saveTemplate = () => {
+    if (!selectedTemplate) return;
+    templateStorage.updateTemplate(selectedTemplate.id, {
+      body: editingBody,
+      mergeFields: validateTemplateFields(editingBody).usedFields,
+    });
+    onRefresh();
+  };
+
+  return (
+    <Page title="Templates" kicker={`${templates.length} local prototype templates`}>
+      <section className="panel editor-panel">
+        <div className="panel-heading">
+          <h2>Template Library</h2>
+          <div className="row-actions">
+            <button onClick={() => { if (selectedTemplate) { templateStorage.duplicateTemplate(selectedTemplate.id); onRefresh(); } }}>Duplicate selected</button>
+            <button onClick={() => { templateStorage.resetTemplates(); onRefresh(); }}>Reset starter templates</button>
+          </div>
+        </div>
+        <div className="template-library">
+          <div className="template-list">
+            {templates.map((template) => (
+              <button key={template.id} className={`template-list-item ${template.id === selectedTemplate?.id ? "active" : ""}`} onClick={() => setSelectedTemplateId(template.id)}>
+                <strong>{template.name}</strong>
+                <small>{template.category} · {template.templateType}</small>
+                {template.requiresAttorneyReview && <Badge tone="red">Review required</Badge>}
+              </button>
+            ))}
+          </div>
+          {selectedTemplate && (
+            <div className="template-editor">
+              <div className="summary-grid">
+                <Readout label="Category" value={selectedTemplate.category} />
+                <Readout label="Type" value={selectedTemplate.templateType} />
+                <Readout label="Merge fields used" value={String(validation.usedFields.length)} />
+                <Readout label="Unknown fields" value={String(validation.unknownFields.length)} />
+              </div>
+              <p className="muted">{selectedTemplate.description}</p>
+              <label>
+                <span>Template body</span>
+                <textarea className="document-textarea" value={editingBody} onChange={(event) => setEditingBody(event.target.value)} />
+              </label>
+              <div className="row-actions">
+                <button className="primary-small" onClick={saveTemplate}>Save local template</button>
+                <Select label="Preview with matter" value={selectedMatter?.id || ""} onChange={setSelectedMatterId} options={matters.map((matter) => matter.id)} />
+              </div>
+              <div className="merge-chip-list">
+                {validation.usedFields.map((field) => <span key={field}>{`{{${field}}}`}</span>)}
+              </div>
+              {validation.unknownFields.length > 0 && <div className="warning-box"><strong>Unknown merge fields</strong><p>{validation.unknownFields.join(", ")}</p></div>}
+              <div className="document-preview"><pre>{preview}</pre></div>
+            </div>
+          )}
+        </div>
+      </section>
+    </Page>
+  );
+}
+
+function MergeFieldsPage({ matters }: { matters: Matter[] }) {
+  const [selectedMatterId, setSelectedMatterId] = useState(matters[0]?.id || "");
+  const selectedMatter = matters.find((matter) => matter.id === selectedMatterId) || matters[0];
+  const groups = useMemo(() => {
+    return listAvailableMergeFields().reduce<Record<string, ReturnType<typeof listAvailableMergeFields>>>((acc, field) => {
+      const group = field.group || "Other";
+      acc[group] = acc[group] || [];
+      acc[group].push(field);
+      return acc;
+    }, {});
+  }, []);
+
+  return (
+    <Page title="Merge Fields" kicker="Template reference">
+      <section className="panel editor-panel">
+        <div className="panel-heading">
+          <h2>Available Merge Fields</h2>
+          <Select label="Example matter" value={selectedMatter?.id || ""} onChange={setSelectedMatterId} options={matters.map((matter) => matter.id)} />
+        </div>
+        <div className="merge-field-groups">
+          {Object.entries(groups).map(([group, fields]) => (
+            <section key={group} className="merge-field-group">
+              <h3>{group}</h3>
+              <div className="merge-field-list">
+                {fields.map((field) => (
+                  <article key={field.key} className="merge-field-card">
+                    <code>{`{{${field.key}}}`}</code>
+                    <strong>{field.label}</strong>
+                    <p>{field.description}</p>
+                    <small>Source: {field.sourcePath}</small>
+                    <Readout label="Example output" value={selectedMatter ? getPreviewFieldValue(selectedMatter, field.key) : field.example || field.fallback} />
+                  </article>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </section>
+    </Page>
+  );
+}
+
+function DocumentDataQualityPanel({ matter }: { matter: Matter }) {
+  const issues = getMatterDocumentDataIssues(matter);
+  return (
+    <section className="panel span-2">
+      <div className="panel-heading"><h2>Data Needed For Documents</h2><span>{issues.length} items to review</span></div>
+      <div className="data-quality-list">
+        {issues.map((issue) => (
+          <article key={issue.label} className={`risk-flag ${issue.severity}`}>
+            <strong>{issue.label}</strong>
+            <p>{issue.description}</p>
+            <small>Review required before relying on generated drafts.</small>
+          </article>
+        ))}
+        {issues.length === 0 && <p className="muted">Common document-generation fields look complete for this prototype.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -803,6 +1094,49 @@ function Readout({ label, value }: { label: string; value: string }) {
 
 function EmptyState({ title, message, actionLabel, onAction }: { title: string; message: string; actionLabel?: string; onAction?: () => void }) {
   return <section className="empty-state panel"><h2>{title}</h2><p>{message}</p>{actionLabel && onAction && <button className="primary-button" onClick={onAction}>{actionLabel}</button>}</section>;
+}
+
+function getPreviewFieldValue(matter: Matter, fieldKey: string) {
+  return getMergeFieldValue(matter, fieldKey);
+}
+
+function copyText(text: string) {
+  if (!text.trim()) return;
+  if (navigator.clipboard) {
+    void navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}
+
+function downloadText(filename: string, text: string) {
+  if (!text.trim()) return;
+  const blob = new Blob([text], { type: filename.endsWith(".html") ? "text/html" : "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename.replace(/[^\w.-]+/g, "-");
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function printTextDocument(title: string, body: string) {
+  if (!body.trim()) return;
+  const popup = window.open("", "_blank", "noopener,noreferrer");
+  if (!popup) return;
+  popup.document.write(`<!doctype html><html><head><title>${escapeHtml(title)}</title><style>body{font-family:Arial,sans-serif;line-height:1.5;margin:40px;white-space:pre-wrap}.review{border:1px solid #d33;padding:10px;margin-bottom:18px;color:#9b1c1c;font-weight:700}</style></head><body><div class="review">Draft only. Attorney/paralegal review required before use.</div>${escapeHtml(body)}</body></html>`);
+  popup.document.close();
+  popup.focus();
+  popup.print();
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char] || char));
 }
 
 function getNextTask(matter: Matter) {

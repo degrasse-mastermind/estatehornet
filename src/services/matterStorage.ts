@@ -8,6 +8,7 @@ const STORAGE_KEY = "estatehornet.matters.v1";
 function normalizeMatter(matter: Matter): Matter {
   return {
     ...matter,
+    generatedDocuments: matter.generatedDocuments || [],
     riskFlags: generateRiskFlags(matter),
   };
 }

@@ -6,7 +6,7 @@ EstateHornet is a Connecticut estate administration workflow prototype for track
 
 ## Current Phase
 
-Phase 1 local prototype using React, Vite, TypeScript, localStorage, and obviously fake seed data. There is no backend, authentication, client portal, document upload, or production data security layer yet.
+Phase 2 local prototype using React, Vite, TypeScript, localStorage, and obviously fake seed data. There is no backend, authentication, client portal, document upload, or production data security layer yet.
 
 ## Phase 1 Features
 
@@ -22,6 +22,48 @@ Phase 1 local prototype using React, Vite, TypeScript, localStorage, and obvious
 - Automatic risk flags for review-sensitive matter conditions.
 - localStorage persistence after refresh.
 - Fake seed matters for testing.
+
+## Phase 2 Document Generation Foundation
+
+Phase 2 adds a local-only document drafting foundation:
+
+- Reusable starter templates stored in localStorage.
+- Merge fields such as `{{decedent.fullName}}`, `{{fiduciary.name}}`, `{{probateCourt}}`, `{{assets.summary}}`, and `{{tasks.nextDeadline}}`.
+- Matter-level generated document records.
+- Draft preview and editing before save.
+- Attorney/paralegal review status workflow.
+- Checklist item linking and optional checklist status updates.
+- Copy-to-clipboard, print, `.txt` download, and `.html` download.
+- Templates page for viewing, duplicating, editing, and resetting starter templates.
+- Merge Fields reference page with example output from fake matter data.
+- Court form helper templates that are drafting aids only, not official forms.
+
+### How Templates Work
+
+Templates are TypeScript starter records loaded into browser localStorage. Template edits are local to your browser and can be reset from the Templates page. This structure is intentionally simple so templates can later move to DOCX templates, PDF mappings, SharePoint, Supabase/Postgres, or another approved database.
+
+### How Merge Fields Work
+
+Templates use double curly braces:
+
+```text
+Dear {{fiduciary.name}},
+
+We are beginning estate administration workflow for {{decedent.fullName}}.
+```
+
+Known fields are replaced with matter data. Missing values render as clear placeholders such as `[Missing fiduciary email]` so drafts do not silently fail.
+
+### Generate a Draft Document
+
+1. Open a matter.
+2. Go to the Documents tab.
+3. Select a template.
+4. Optionally link a document checklist item.
+5. Click Generate Draft.
+6. Review/edit the preview.
+7. Save the generated draft.
+8. Copy, print, or download the draft as needed.
 
 ## Run Locally
 
@@ -51,6 +93,10 @@ Do not enter real client data, death certificates, SSNs, account numbers, court 
 
 EstateHornet is an internal workflow and matter management prototype. It does not provide legal advice. All deadlines, filings, tax issues, distributions, communications, and documents require attorney/paralegal review.
 
+Generated documents are drafts only. Attorney/paralegal review is required before using generated content. Official court forms must be reviewed against current Connecticut Probate Court requirements before filing. Court form helpers are drafting aids only and are not completed official court forms.
+
+Browser localStorage is not secure for confidential production data.
+
 ## Current Limitations
 
 - Uses browser localStorage only.
@@ -58,7 +104,9 @@ EstateHornet is an internal workflow and matter management prototype. It does no
 - No audit log.
 - No encrypted file storage.
 - No real probate court database.
-- No document generation or form filling.
+- No production-grade document automation or official form filling.
+- No official court-form PDF filling.
+- No DOCX generation package yet.
 - No email, Microsoft 365, SharePoint, or database integration.
 - No legal advice or automated legal conclusions.
 
@@ -77,17 +125,22 @@ Future secrets should live in `.env.local` during local development and in an ap
 
 ## Future Roadmap
 
-- Document generation engine
-- PDF form filling
-- DOCX template generation
-- Client portal
-- Secure client document uploads
-- Email automation
-- Outlook/Microsoft 365 integration
-- SharePoint/OneDrive integration
-- Supabase/Postgres database adapter
-- Secure file storage
-- Audit log
+### Phase 3
+
+- Secure database
+- Authentication
 - Role-based permissions
-- Attorney approval workflow
-- AI-assisted draft emails and summaries
+- Audit logs
+- SharePoint/OneDrive integration
+- Outlook email draft integration
+- Real template governance
+
+### Phase 4
+
+- Official PDF form filling, if approved
+- Client portal
+- Secure uploads
+- E-signature workflow
+- Attorney approval queues
+- Production deployment
+- AI-assisted draft emails and summaries after security and approval workflows exist

@@ -9,6 +9,7 @@ function normalizeMatter(matter: Matter): Matter {
   return {
     ...matter,
     generatedDocuments: matter.generatedDocuments || [],
+    generatedPdfDocuments: matter.generatedPdfDocuments || [],
     riskFlags: generateRiskFlags(matter),
   };
 }

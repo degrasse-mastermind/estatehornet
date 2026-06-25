@@ -11,3 +11,7 @@ coverage
 .vscode
 .idea
 *.local
+
+# Locally supplied official probate form templates
+public/forms/probate/*.pdf
+!public/forms/probate/.gitkeep

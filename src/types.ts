@@ -96,6 +96,22 @@ export type DocumentStatus =
 
 export type NoteVisibility = "internal only" | "attorney review" | "client-shareable draft";
 export type RiskSeverity = "low" | "medium" | "high";
+export type DocumentTemplateType =
+  | "letter"
+  | "court-form-helper"
+  | "client-email"
+  | "institution-letter"
+  | "internal-memo"
+  | "checklist-packet"
+  | "closing-document";
+
+export type GeneratedDocumentStatus =
+  | "draft"
+  | "attorney review"
+  | "approved"
+  | "sent"
+  | "filed"
+  | "archived";
 
 export interface ProbateCourt {
   id: string;
@@ -168,6 +184,45 @@ export interface RiskFlag {
   recommendedAction: string;
 }
 
+export interface MergeField {
+  key: string;
+  label: string;
+  description: string;
+  sourcePath: string;
+  fallback: string;
+  group?: string;
+  example?: string;
+}
+
+export interface DocumentTemplate {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  templateType: DocumentTemplateType;
+  body: string;
+  mergeFields: string[];
+  defaultStatus: GeneratedDocumentStatus;
+  requiresAttorneyReview: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GeneratedDocument {
+  id: string;
+  matterId: string;
+  templateId: string;
+  title: string;
+  category: string;
+  generatedBody: string;
+  status: GeneratedDocumentStatus;
+  generatedAt: string;
+  updatedAt: string;
+  generatedBy: string;
+  notes: string;
+  relatedDocumentChecklistItemId?: string;
+}
+
 export interface Matter {
   id: string;
   createdAt: string;
@@ -204,6 +259,7 @@ export interface Matter {
   assets: Asset[];
   tasks: Task[];
   documents: DocumentChecklistItem[];
+  generatedDocuments: GeneratedDocument[];
   notes: Note[];
   riskFlags: RiskFlag[];
 }

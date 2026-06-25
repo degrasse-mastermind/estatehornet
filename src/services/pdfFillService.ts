@@ -1,4 +1,4 @@
-import { PDFCheckBox, PDFDocument, PDFDropdown, PDFOptionList, PDFRadioGroup, PDFTextField } from "pdf-lib";
+import { PDFCheckBox, PDFDocument, PDFDropdown, PDFField, PDFOptionList, PDFRadioGroup, PDFTextField, PDFFont, StandardFonts } from "pdf-lib";
 import type { Matter } from "../types";
 import type { PdfFieldMapping, PdfFillPreview, PdfGenerationResult, PdfPreviewField } from "../types/pdfForms";
 import { makeId, nowIso, todayIso } from "../utils/date";
@@ -102,22 +102,37 @@ function fillField(form: ReturnType<PDFDocument["getForm"]>, mapping: PdfFieldMa
   const field = form.getField(mapping.pdfFieldName);
   if (field instanceof PDFTextField) {
     field.setText(String(value));
-    return;
+    return field;
   }
   if (field instanceof PDFCheckBox) {
     Boolean(value) ? field.check() : field.uncheck();
-    return;
+    return field;
   }
   if (field instanceof PDFRadioGroup && typeof value === "string" && value) {
     field.select(value);
-    return;
+    return field;
   }
   if ((field instanceof PDFDropdown || field instanceof PDFOptionList) && typeof value === "string" && value) {
     field.select(value);
-    return;
+    return field;
   }
   if ("setText" in field && typeof value === "string") {
     (field as PDFTextField).setText(value);
+  }
+  return field;
+}
+
+function updateFilledFieldAppearance(field: PDFField, font: PDFFont) {
+  if (field instanceof PDFTextField) {
+    field.defaultUpdateAppearances(font);
+    return;
+  }
+  if (field instanceof PDFDropdown || field instanceof PDFOptionList) {
+    field.defaultUpdateAppearances(font);
+    return;
+  }
+  if (field instanceof PDFCheckBox || field instanceof PDFRadioGroup) {
+    field.defaultUpdateAppearances();
   }
 }
 
@@ -128,6 +143,7 @@ export async function generateFilledPdf(templateId: string, matter: Matter, opti
   const bytes = await fetchPdfBytes(preview.template.filePath);
   const pdfDoc = await PDFDocument.load(bytes);
   const form = pdfDoc.getForm();
+  const appearanceFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const missingFields: string[] = [...preview.missingRequiredValues];
   const mappedFields = enabledMappings(preview.template.fields);
   let filledCount = 0;
@@ -140,7 +156,8 @@ export async function generateFilledPdf(templateId: string, matter: Matter, opti
       continue;
     }
     try {
-      fillField(form, mapping, value);
+      const filledField = fillField(form, mapping, value);
+      updateFilledFieldAppearance(filledField, appearanceFont);
       filledCount += 1;
     } catch (error) {
       console.error(`Unable to fill PDF field ${mapping.pdfFieldName}`, error);

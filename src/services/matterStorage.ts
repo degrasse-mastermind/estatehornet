@@ -4,6 +4,7 @@ import { generateRiskFlags } from "../utils/riskEngine";
 import { nowIso } from "../utils/date";
 
 const STORAGE_KEY = "estatehornet.matters.v1";
+const JONES_HOPSON_TEST_MATTER_ID = "matter-24fb8ef9-8000-4383-9f6e-756641a2c6f5";
 
 function normalizeMatter(matter: Matter): Matter {
   return {
@@ -57,8 +58,38 @@ export const matterStorage = {
   },
 
   seedMattersIfEmpty() {
-    if (this.getMatters().length > 0) return;
-    saveMatters(createSeedMatters());
+    const existing = this.getMatters();
+    const seeds = createSeedMatters();
+    if (existing.length === 0) {
+      saveMatters(seeds);
+      return;
+    }
+
+    const jonesHopsonSeed = seeds.find((matter) => matter.id === JONES_HOPSON_TEST_MATTER_ID);
+    if (!jonesHopsonSeed) return;
+
+    const existingIndex = existing.findIndex((matter) => matter.id === JONES_HOPSON_TEST_MATTER_ID);
+    if (existingIndex === -1) {
+      saveMatters([jonesHopsonSeed, ...existing]);
+      return;
+    }
+
+    const existingJonesHopson = existing[existingIndex];
+    const sparseJonesHopson =
+      (existingJonesHopson.people?.length || 0) < 8 ||
+      (existingJonesHopson.assets?.length || 0) < 8 ||
+      existingJonesHopson.decedentFirstName !== "Jones" ||
+      existingJonesHopson.decedentLastName !== "Hopson";
+
+    if (sparseJonesHopson) {
+      const merged = [...existing];
+      merged[existingIndex] = {
+        ...jonesHopsonSeed,
+        generatedDocuments: existingJonesHopson.generatedDocuments || [],
+        generatedPdfDocuments: existingJonesHopson.generatedPdfDocuments || [],
+      };
+      saveMatters(merged);
+    }
   },
 };
 

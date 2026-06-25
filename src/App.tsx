@@ -304,6 +304,7 @@ function MatterList({ matters, navigate }: { matters: Matter[]; navigate: (route
 function MatterCard({ matter, onClick }: { matter: Matter; onClick: () => void }) {
   const nextTask = getNextTask(matter);
   const tone = matterTone(matter);
+  const hasOverdueTasks = matter.tasks.some((task) => isOverdue(task.dueDate, task.status));
   return (
     <button className="matter-card" onClick={onClick}>
       <div className="matter-primary">
@@ -316,6 +317,7 @@ function MatterCard({ matter, onClick }: { matter: Matter; onClick: () => void }
       <div className="matter-meta">
         <Badge>{matter.stage}</Badge>
         <Badge tone={tone}>{matter.status}</Badge>
+        {hasOverdueTasks && <Badge tone="red">Overdue</Badge>}
         <span><strong>Next action</strong>{nextTask?.title || "No open task"}</span>
         <span><strong>Next deadline</strong>{nextTask ? formatDate(nextTask.dueDate) : "None"}</span>
         <span><strong>Assigned</strong>{matter.assignedParalegal}</span>
@@ -617,6 +619,7 @@ function TasksEditor({ matter, onChange }: { matter: Matter; onChange: (tasks: T
               <span>{task.status}</span>
               <button onClick={() => onChange(matter.tasks.map((item) => item.id === task.id ? { ...item, status: "done", updatedAt: nowIso() } : item))}>Mark complete</button>
               <button onClick={() => setEditing(task)}>Edit</button>
+              <button onClick={() => onChange(matter.tasks.filter((item) => item.id !== task.id))}>Delete</button>
             </div>
           </article>
         ))}
@@ -657,10 +660,16 @@ function DocumentsEditor({ documents, onChange }: { documents: DocumentChecklist
 
 function NotesEditor({ notes, onChange }: { notes: Note[]; onChange: (notes: Note[]) => void }) {
   const [draft, setDraft] = useState<Note>(emptyNote);
+  const [editing, setEditing] = useState<Note | null>(null);
   const addNote = () => {
     if (!draft.text.trim()) return;
     onChange([{ ...draft, id: makeId("note"), dateTime: nowIso() }, ...notes]);
     setDraft(emptyNote());
+  };
+  const saveNote = () => {
+    if (!editing?.text.trim()) return;
+    onChange(notes.map((note) => note.id === editing.id ? editing : note));
+    setEditing(null);
   };
   return (
     <section className="panel editor-panel">
@@ -671,8 +680,26 @@ function NotesEditor({ notes, onChange }: { notes: Note[]; onChange: (notes: Not
         <Select label="Visibility" value={draft.visibility} onChange={(value) => setDraft({ ...draft, visibility: value as Note["visibility"] })} options={["internal only", "attorney review", "client-shareable draft"]} />
       </FormGrid>
       <button className="primary-button" onClick={addNote}>Add note</button>
+      {editing && (
+        <InlineEditor title="Edit note" onCancel={() => setEditing(null)} onSave={saveNote}>
+          <FormGrid>
+            <Input label="Note text" value={editing.text} onChange={(value) => setEditing({ ...editing, text: value })} className="wide" />
+            <Input label="Author" value={editing.author} onChange={(value) => setEditing({ ...editing, author: value })} />
+            <Select label="Visibility" value={editing.visibility} onChange={(value) => setEditing({ ...editing, visibility: value as Note["visibility"] })} options={["internal only", "attorney review", "client-shareable draft"]} />
+          </FormGrid>
+        </InlineEditor>
+      )}
       <div className="notes-list">
-        {notes.map((note) => <article key={note.id} className="note-card"><p>{note.text}</p><small>{note.author} · {formatDate(note.dateTime.slice(0, 10))} · {note.visibility}</small></article>)}
+        {notes.map((note) => (
+          <article key={note.id} className="note-card">
+            <p>{note.text}</p>
+            <small>{note.author} · {formatDate(note.dateTime.slice(0, 10))} · {note.visibility}</small>
+            <div className="row-actions">
+              <button onClick={() => setEditing(note)}>Edit</button>
+              <button onClick={() => onChange(notes.filter((item) => item.id !== note.id))}>Delete</button>
+            </div>
+          </article>
+        ))}
       </div>
     </section>
   );

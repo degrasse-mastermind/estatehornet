@@ -6,7 +6,7 @@ EstateHornet is a Connecticut estate administration workflow prototype for track
 
 ## Current Phase
 
-Phase 2 local prototype using React, Vite, TypeScript, localStorage, and obviously fake seed data. There is no backend, authentication, client portal, document upload, or production data security layer yet.
+Phase 3A local prototype using React, Vite, TypeScript, localStorage, `pdf-lib`, and obviously fake seed data. There is no backend, authentication, client portal, document upload, secure file storage, or production data security layer yet.
 
 ## Phase 1 Features
 
@@ -65,6 +65,80 @@ Known fields are replaced with matter data. Missing values render as clear place
 7. Save the generated draft.
 8. Copy, print, or download the draft as needed.
 
+## Phase 3A: PC-200 PDF Form Engine
+
+Phase 3A adds a proof-of-concept PDF form engine for the Connecticut Probate Court PC-200, Petition/Administration or Probate of Will. It prepares draft PDFs only. Every generated PC-200 must be treated as `Draft - attorney/paralegal review required`.
+
+### Purpose
+
+- Inspect an official fillable PC-200 PDF supplied locally by the firm.
+- Display detected AcroForm field names and field types.
+- Map EstateHornet matter data to PC-200 fields through `src/services/pc200Mapping.ts`.
+- Generate a draft completed PC-200 PDF when enabled mappings match the official PDF field names.
+- Save generated PDF metadata to the matter without storing PDF bytes in localStorage.
+- Offer checklist integration by updating the PC-200 checklist item to `attorney review`.
+
+### Dependency
+
+Phase 3A uses [`pdf-lib`](https://pdf-lib.js.org/) for client-side PDF loading, AcroForm inspection, field filling, checkbox handling where mappings exist, and draft PDF saving.
+
+### Install the Official PC-200 PDF
+
+Do not use random third-party form sources. Download the current official PC-200 PDF from the Connecticut Probate Courts website and place it here:
+
+```text
+public/forms/probate/PC-200.pdf
+```
+
+If the file is missing, the app will show:
+
+```text
+PC-200.pdf is not installed. Place the official Connecticut Probate Court PC-200 PDF at public/forms/probate/PC-200.pdf to enable this feature.
+```
+
+### Inspect and Map Fields
+
+1. Install dependencies:
+
+   ```bash
+   pnpm install
+   ```
+
+   If your environment uses npm instead:
+
+   ```bash
+   npm install
+   ```
+
+2. Start the app:
+
+   ```bash
+   pnpm dev
+   ```
+
+3. Open EstateHornet.
+4. Go to `PDF Forms`.
+5. Open `PC-200 Inspector`.
+6. Inspect the detected field names.
+7. Update `src/services/pc200Mapping.ts` by replacing `UPDATE_AFTER_INSPECTION_*` placeholder field names with the exact PDF field names and setting those mappings to `enabled: true`.
+8. Open a fake matter.
+9. Go to `Documents`.
+10. Click `Prepare PC-200 Draft PDF`.
+11. Review missing fields and warnings.
+12. Generate and download the draft PDF.
+13. Save the generated PDF metadata record to the matter if appropriate.
+
+### Known Limitations
+
+- PC-200 only.
+- Requires fillable AcroForm fields.
+- Coordinate overlay is not implemented yet.
+- Generated PDFs are draft only.
+- PDF files are not securely stored yet.
+- localStorage is not production-safe.
+- Human review is required before filing.
+- Official form versions may change, requiring field-name reinspections and mapping updates.
+
 ## Run Locally
 
 Install dependencies:
@@ -104,8 +178,8 @@ Browser localStorage is not secure for confidential production data.
 - No audit log.
 - No encrypted file storage.
 - No real probate court database.
-- No production-grade document automation or official form filling.
-- No official court-form PDF filling.
+- No production-grade document automation or secure official form filing.
+- PC-200 PDF filling is a draft-only proof of concept.
 - No DOCX generation package yet.
 - No email, Microsoft 365, SharePoint, or database integration.
 - No legal advice or automated legal conclusions.

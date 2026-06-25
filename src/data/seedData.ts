@@ -27,7 +27,7 @@ function manualTask(input: Omit<Task, "id" | "createdAt" | "updatedAt">): Task {
   return { id: makeId("task"), createdAt: stamp, updatedAt: stamp, manual: true, ...input };
 }
 
-function buildMatter(input: Omit<Matter, "id" | "createdAt" | "updatedAt" | "tasks" | "documents" | "generatedDocuments" | "riskFlags"> & { manualTasks?: Task[]; updatedAt?: string }): Matter {
+function buildMatter(input: Omit<Matter, "id" | "createdAt" | "updatedAt" | "tasks" | "documents" | "generatedDocuments" | "generatedPdfDocuments" | "riskFlags"> & { manualTasks?: Task[]; updatedAt?: string }): Matter {
   const createdAt = nowIso();
   const base: Matter = {
     id: makeId("matter"),
@@ -36,6 +36,7 @@ function buildMatter(input: Omit<Matter, "id" | "createdAt" | "updatedAt" | "tas
     tasks: [],
     documents: [],
     generatedDocuments: [],
+    generatedPdfDocuments: [],
     riskFlags: [],
     ...input,
   };

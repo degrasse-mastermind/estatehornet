@@ -1,3 +1,5 @@
+import type { GeneratedPdfDocument } from "./types/pdfForms";
+
 export type YesNoUnknown = "yes" | "no" | "unknown";
 export type ReviewableYesNo = "yes" | "no" | "review";
 
@@ -260,6 +262,7 @@ export interface Matter {
   tasks: Task[];
   documents: DocumentChecklistItem[];
   generatedDocuments: GeneratedDocument[];
+  generatedPdfDocuments: GeneratedPdfDocument[];
   notes: Note[];
   riskFlags: RiskFlag[];
 }

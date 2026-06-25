@@ -763,6 +763,42 @@ th {
   gap: 10px;
 }
 
+.pc200-panel {
+  border-left: 5px solid var(--amber);
+}
+
+.pc200-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+.warning-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.warning-list span {
+  border: 1px solid #f5c86c;
+  background: #fff9e8;
+  color: #7c4a03;
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.pdf-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+td small {
+  display: block;
+  margin-top: 5px;
+}
+
 .template-list,
 .merge-field-groups,
 .data-quality-list {
@@ -929,7 +965,8 @@ footer {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .cards-grid {
+  .cards-grid,
+  .pdf-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -975,8 +1012,37 @@ footer {
   .summary-grid,
   .matter-meta,
   .cards-grid,
+  .pdf-card-grid,
   .stepper {
     grid-template-columns: 1fr;
+  }
+
+  .responsive-table table,
+  .responsive-table thead,
+  .responsive-table tbody,
+  .responsive-table tr,
+  .responsive-table th,
+  .responsive-table td {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .responsive-table thead {
+    display: none;
+  }
+
+  .responsive-table tr {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: white;
+    margin-bottom: 10px;
+    padding: 8px;
+  }
+
+  .responsive-table td {
+    border-bottom: 0;
+    padding: 8px;
   }
 
   .metric-card {

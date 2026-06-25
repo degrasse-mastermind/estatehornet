@@ -19,6 +19,8 @@ function stringifyRawValue(value: string | number | boolean | null) {
 }
 
 function formatValue(mapping: PdfFieldMapping, rawValue: string | number | boolean | null): string | boolean {
+  const rawMissing = rawValue === null || rawValue === undefined || String(rawValue).trim() === "";
+  if (rawMissing && mapping.fallback) return mapping.fallback;
   if (mapping.fieldType === "checkbox" || mapping.formatter === "checkbox") {
     return formatCheckbox(typeof rawValue === "number" ? String(rawValue) : rawValue, mapping.checkedWhen);
   }
@@ -146,8 +148,8 @@ export async function generateFilledPdf(templateId: string, matter: Matter, opti
     }
   }
 
-  if (options.flatten) form.flatten();
-  const output = await pdfDoc.save();
+  if (options.flatten) form.flatten({ updateFieldAppearances: false });
+  const output = await pdfDoc.save({ updateFieldAppearances: false });
   const pdfBuffer = new ArrayBuffer(output.byteLength);
   new Uint8Array(pdfBuffer).set(output);
   const decedentLastName = matter.decedentLastName.trim() || "Matter";

@@ -25,6 +25,13 @@ function inferFieldType(field: PDFField): PdfFieldType {
   return "unknown";
 }
 
+function getFieldNotes(field: PDFField, mapping?: PdfFieldMapping) {
+  if (field instanceof PDFTextField && field.isRichFormatted()) {
+    return `${mapping?.notes ? `${mapping.notes} ` : ""}Rich-text/XFA field detected; pdf-lib cannot safely read this field. Treat as review-only unless converted/fill-tested.`;
+  }
+  return mapping?.notes;
+}
+
 function getPossibleValues(field: PDFField) {
   if (field instanceof PDFDropdown || field instanceof PDFOptionList || field instanceof PDFRadioGroup) {
     try {
@@ -47,7 +54,7 @@ function mapFields(fields: PDFField[], mappings: PdfFieldMapping[]): PdfInspecti
       possibleValues: getPossibleValues(field),
       mapped: Boolean(mapping),
       mappedTo: mapping?.estateHornetPath,
-      notes: mapping?.notes,
+      notes: getFieldNotes(field, mapping),
     };
   });
 }

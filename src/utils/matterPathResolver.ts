@@ -17,9 +17,25 @@ function personLine(person: Matter["people"][number]) {
   return `${person.name || "Unnamed"} (${person.role})${person.address ? ` - ${person.address}` : ""}${person.email ? ` - ${person.email}` : ""}`;
 }
 
+function personNamesByRole(matter: Matter, roles: Matter["people"][number]["role"][]) {
+  return listLines(matter.people.filter((person) => roles.includes(person.role)).map((person) => person.name || "Unnamed"));
+}
+
+function personLinesByRole(matter: Matter, roles: Matter["people"][number]["role"][]) {
+  return listLines(matter.people.filter((person) => roles.includes(person.role)).map(personLine));
+}
+
 function assetLine(asset: Matter["assets"][number]) {
   const value = Number(asset.estimatedValue) || 0;
   return `${asset.assetType}: ${asset.description || "description missing"}${value ? ` - $${value.toLocaleString()}` : ""} - ownership: ${asset.ownership} - probate: ${asset.probateAsset}`;
+}
+
+function locatePersonsReview(matter: Matter) {
+  const items = [
+    ...matter.people.filter((person) => person.role === "unknown heir").map((person) => `${person.name || "Unnamed unknown heir"} requires unknown-heir review.`),
+    ...matter.people.filter((person) => !person.address.trim()).map((person) => `${person.name || "Unnamed"} (${person.role}) has no address entered.`),
+  ];
+  return listLines(items);
 }
 
 export function resolveMatterPath(matter: Matter, path: string): string | number | boolean | null {
@@ -52,6 +68,14 @@ export function resolveMatterPath(matter: Matter, path: string): string | number
     "matter.people.heirsList": listLines(matter.people.filter((person) => ["heir", "child", "spouse", "unknown heir"].includes(person.role)).map(personLine)),
     "matter.people.beneficiariesList": listLines(matter.people.filter((person) => ["beneficiary", "child", "spouse"].includes(person.role)).map(personLine)),
     "matter.people.interestedPartiesList": listLines(matter.people.map(personLine)),
+    "matter.people.spouseList": personLinesByRole(matter, ["spouse"]),
+    "matter.people.childrenList": personLinesByRole(matter, ["child"]),
+    "matter.people.childrenNames": personNamesByRole(matter, ["child"]),
+    "matter.people.beneficiaryNames": personNamesByRole(matter, ["beneficiary"]),
+    "matter.people.beneficiariesUnderWill": personLinesByRole(matter, ["beneficiary"]),
+    "matter.people.unknownHeirsList": personLinesByRole(matter, ["unknown heir"]),
+    "matter.people.missingAddressList": listLines(matter.people.filter((person) => !person.address.trim()).map((person) => `${person.name || "Unnamed"} (${person.role})`)),
+    "matter.people.locatePersonsReview": locatePersonsReview(matter),
     "matter.assets.summary": listLines(matter.assets.map(assetLine)),
     "matter.assets.probateAssetSummary": listLines(matter.assets.filter((asset) => asset.probateAsset === "yes" || asset.probateAsset === "review").map(assetLine)),
     "matter.assets.estimatedTotalValue": assetTotal(matter),

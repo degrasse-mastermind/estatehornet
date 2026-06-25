@@ -753,6 +753,11 @@ th {
   color: var(--muted);
 }
 
+.generated-document-row strong,
+.generated-document-row small {
+  display: block;
+}
+
 .generated-actions {
   display: grid;
   gap: 10px;

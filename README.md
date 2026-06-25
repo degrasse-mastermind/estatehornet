@@ -17,7 +17,7 @@ Phase 1 local prototype using React, Vite, TypeScript, localStorage, and obvious
 - Automatic task generation for opening review, CT estate tax review, inventory, PC-251 real estate review, creditor period, PC-237, and one-year status review.
 - Matter detail tabs for overview, people, assets, deadlines/tasks, documents, and notes.
 - Add, edit, and delete interested parties, assets, and tasks.
-- Add internal notes.
+- Add, edit, and delete internal notes.
 - Update document checklist statuses.
 - Automatic risk flags for review-sensitive matter conditions.
 - localStorage persistence after refresh.
@@ -62,9 +62,9 @@ EstateHornet is an internal workflow and matter management prototype. It does no
 - No email, Microsoft 365, SharePoint, or database integration.
 - No legal advice or automated legal conclusions.
 
-## Private GitHub Repo Guidance
+## Public GitHub Repo Guidance
 
-This project is intended for a private repository named `estatehornet`.
+This repository may be public. Keep it safe to share by committing only prototype code, fake seed data, and non-confidential documentation.
 
 Never commit:
 
